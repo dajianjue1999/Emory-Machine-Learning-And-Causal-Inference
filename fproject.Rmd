@@ -15,11 +15,10 @@ library(ggplot2)
 library(tree)
 library(rpart)
 library(rpart.plot)
-```
-
-```{r}
 library(dplyr)
 library(sqldf)
+library(grf)
+library(causalTree)
 ```
 
 
@@ -232,8 +231,30 @@ text(x = 2, label = "ATE_est = 0.277")
 ```
 
 ```{r}
-hist(psmatch_whole_logit$CATE,breaks = 40,main = "Treatment Effect Estimate using RF")
+hist(psmatch_whole_logit$CATE,breaks = 40,main = "Treatment Effect Estimate using Logit")
 abline(v = ate.final.school_logit,col="blue")
 text(x = 2, label = "ATE_est = 0.251")
 ```
 
+```{r}
+set.seed(6699)
+tree.rf = rpart(CATE~S3+C1+C2+C3+X1+X2+X3+X4+X5+XC, data = psmatch_whole, control = rpart.control(cp = 0.0033))
+#Regression Tree Based on Regressing Individual Treatment Effect Estimates on Observed Covariates; Propensity Scores Estimated by Random Forests
+rpart.plot(tree.rf, extra=1)
+```
+
+```{r}
+rf.rf <- randomForest(CATE~S3+C1+C2+C3+X1+X2+X3+X4+X5+XC, data=psmatch_whole, importance=T)
+varImpPlot(rf.rf, type=2)
+```
+
+```{r}
+tree.logit = rpart(CATE ~S3+C1+C2+C3+X1+X2+X3+X4+X5+XC, data = psmatch_whole_logit, control = rpart.control(cp = 0.0033))
+#Regression Tree Based on Regressing Individual Treatment Effect Estimates on Observed Covariates; Propensity Scores Estimated by Logit model
+rpart.plot(tree.logit, extra=1)
+```
+
+```{r}
+rf.logit <- randomForest(CATE~S3+C1+C2+C3+X1+X2+X3+X4+X5+XC, data=psmatch_whole_logit, importance=T)
+varImpPlot(rf.logit, type=2)
+```
