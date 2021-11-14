@@ -1,0 +1,304 @@
+---
+title: "Assign4"
+author: "Daoyang E"
+date: "10/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+if(!require(fBasics)){
+install.packages("fBasics")
+library(fBasics)
+}
+if(!require(xtable)){
+install.packages("xtable")
+library(xtable)
+}
+if(!require(readr)){
+install.packages("readr")
+library(readr)
+}
+if(!require(rpart)){
+install.packages("rpart")
+library(rpart)
+}
+if(!require(rpart.plot)){
+install.packages("rpart.plot")
+library(rpart.plot)
+}
+if(!require(grf)){
+install.packages("grf")
+library(grf)
+}
+if(!require(reshape2)){
+install.packages("reshape2")
+library(reshape2)
+}
+if(!require(ggplot2)){
+install.packages("ggplot2")
+library(ggplot2)
+}
+if(!require(dplyr)){
+install.packages("dplyr")
+1
+library(dplyr)
+}
+if(!require(car)){
+install.packages("car")
+library(car)
+}
+
+```
+
+```{r}
+rm(list=ls(all=TRUE))
+```
+
+```{r}
+df <- read.csv(file = "Names.csv")
+```
+
+```{r}
+outcome_variable_name <- "call_back"
+treatment_variable_name <- "black"
+covariate_names <- c("female", "chicago", "high")
+```
+
+```{r}
+all_variables_names <- c(outcome_variable_name, treatment_variable_name, covariate_names)
+df_reduced <- df[, which(names(df) %in% all_variables_names)]
+```
+
+```{r}
+df_reduced <- na.omit(df_reduced)
+df_reduced <- data.frame(lapply(df_reduced, function(x) as.numeric(as.character(x))))
+```
+
+```{r}
+summary(df_reduced)
+```
+
+### I.1.1
+
+I will do the derivation based on the moment function when $x_i = x$, and I will do the estimate based on the equation $\hat{\theta _C}\:=\:\hat{\theta _P}-\frac{1}{n_C}\sum \xi ^,A_P^{-1}\psi _P\left(O_i\right)$, where $A_P=\frac{1}{n_P}\sum \Delta \psi _P\left(O_i\right)$.
+
+In this question, we have assumed that it is a simple model $callback_i = β_0 + black_iτ + u_i$, so the treatment effect is without confounding, that $callback = β_0(x) + blackτ(x) + u$ and $p_i = A_p^{-1}(black_i-\bar{black_p})(callback_i-\bar {callback_p}-(black_i-\bar{black_p})\hat τ_P)$, and in this case $A_P = \frac{1}{n_P}\sum \left(black_i-\overline{black_P}\right)^2$. And we will going to split the tree based on $p_i$.
+
+The reason we could use a pseudo outcome to help estimate is that the estimate of the parent node would be in the form of average using all the observations in the parent node. While the estimate of child node can be computed by
+averaging how much each observations in the child node dragged up or down from the parent node estimate. The child node might undergone large or small changes quickly, so we would estimate using the gradient at parent node $A_P$, which is not affected by how child node estimates are adjusted.
+
+### I.1.2
+
+```{r}
+if(!require(grf)){
+install.packages("grf")
+library(grf)
+}
+```
+
+```{r}
+df_reduced.highone <- df_reduced %>% filter(high == 1)
+df_reduced.highzero <- df_reduced %>% filter(high == 0)
+```
+
+```{r}
+cf.highone <- causal_forest(
+X = as.matrix(df_reduced.highone[,covariate_names]),
+Y = df_reduced.highone$call_back,
+W = df_reduced.highone$black,
+num.trees=2000,
+W.hat = 0.5)
+```
+
+```{r}
+oob_pred.highone <- predict(cf.highone, estimate.variance=TRUE)
+```
+
+```{r}
+oob_tauhat_cf.highone <- oob_pred.highone$predictions
+oob_tauhat_cf_se.highone <- sqrt(oob_pred.highone$variance.estimates)
+```
+
+```{r}
+cf.highzero <- causal_forest(
+X = as.matrix(df_reduced.highzero[,covariate_names]),
+Y = df_reduced.highzero$call_back,
+W = df_reduced.highzero$black,
+num.trees=2000,
+W.hat = 0.5)
+```
+
+```{r}
+oob_pred.highzero <- predict(cf.highzero, estimate.variance=TRUE)
+```
+
+```{r}
+oob_tauhat_cf.highzero <- oob_pred.highzero$predictions
+oob_tauhat_cf_se.highzero <- sqrt(oob_pred.highzero$variance.estimates)
+```
+
+```{r}
+par(mfrow=c(1,2))
+hist(oob_tauhat_cf.highone, main="Causal forests, high = 1")
+hist(oob_tauhat_cf.highzero, main="Causal forest, high = 0")
+```
+
+Generally speaking, the two graphs could be counted as showing heterogeneous treatment effect. Since for both high = 1 and high = 0 plots, the estimates are generally negative, meaning negative treatment effect, the employers do seem to pay less attention to the characteristics listed on the resumes with African-American sounding names.
+
+### I.2.2
+
+```{r}
+outcome_variable_name <- "call_back"
+treatment_variable_name <- "black"
+covariate_names<-
+c("ï..ofjobs","yearsexp","honors","volunteer",
+"military","empholes","workinschool",
+"email","computerskills","specialskills",
+"college","female","chicago")
+```
+
+```{r}
+all_variables_names <-
+c(outcome_variable_name,
+treatment_variable_name, covariate_names)
+df_reduced <- df[, which(names(df) %in% all_variables_names)]
+```
+
+```{r}
+df_reduced <- na.omit(df_reduced)
+df_reduced <- data.frame(lapply(df_reduced, function(x) as.numeric(as.character(x))))
+```
+
+```{r}
+cf <- causal_forest(
+X = as.matrix(df_reduced[,covariate_names]),
+Y = df_reduced$call_back,
+W = df_reduced$black,
+num.trees=2000,
+W.hat = 0.5)
+```
+
+```{r}
+oob_pred <- predict(cf, estimate.variance=TRUE)
+oob_tauhat_cf <- oob_pred$predictions
+oob_tauhat_cf_se <- sqrt(oob_pred$variance.estimates)
+```
+
+### I.2.3
+
+```{r}
+num_tiles <- 3 # ntiles = CATE is above / below the median
+df_reduced$cate <- oob_tauhat_cf
+df_reduced$ntile <- factor(ntile(oob_tauhat_cf, n=num_tiles))
+```
+
+```{r}
+ols_sample_ate <- lm("call_back ~ ntile + ntile:black", data=df_reduced)
+summary(ols_sample_ate)
+estimated_sample_ate <- coef(summary(ols_sample_ate))[(num_tiles+1):(2*num_tiles), c("Estimate", "Std. Error")]
+```
+
+```{r}
+estimated_sample_ate
+```
+
+We see that the bottom 1/3 group has mean of heterogeneous treatment effect of -0.0363, the middle 1/3 group has mean of heterogenous effect of -0.0414 and the top 1/3 group has mean of heterogeneous effect of -0.01695.
+
+### I.2.4
+
+```{r}
+cov_means <- lapply(covariate_names, function(covariate) {
+lm(paste0(covariate, ' ~ 0 + ntile'), data = df_reduced)
+})
+```
+
+```{r}
+t((summary(cov_means[[1]])$coefficient)[,c("Estimate", "Std. Error")])
+```
+
+```{r}
+covariate_means_per_ntile <- aggregate(. ~ ntile, df_reduced, mean)[,covariate_names]
+t(covariate_means_per_ntile)
+```
+
+```{r}
+covariate_means<- aggregate(. ~1, df_reduced, mean)[,covariate_names]
+t(covariate_means)
+```
+
+```{r}
+temp<-data.frame(t(covariate_means_per_ntile[1:3,]),t(covariate_means))
+ntile_weights <- 0.33
+temp<-data.frame(n1=temp[,1],n2=temp[,2],n3=temp[,3],mean=temp[,4])
+covariate_means_weighted_var<-(ntile_weights*((temp[,1]-temp[,4])^2+(temp[,2]-temp[,4])^2+(temp[,3]-temp[,4])^2))
+```
+
+```{r}
+covariate_var <- apply(df_reduced, 2, var)[covariate_names]
+cov_variation <- covariate_means_weighted_var / covariate_var
+```
+
+```{r}
+data.frame(var=names(sort(cov_variation, decreasing = TRUE)),cov_var=sort(cov_variation, decreasing = TRUE))
+```
+
+The five variables that seem to be important in defining treatment effect heterogeneity is specialskills, honors, chicago, email and ï..ofjobs. The variables that are representing the characteristics of resume are ï..ofjobs, honors, specialskills, email.
+
+### I.2.5
+
+```{r}
+covariate_names
+```
+
+
+```{r}
+hypothesis_sample_ate.spskill <- paste0("ntile1 = ", paste0("ntile", seq(2, num_tiles)))
+hypothesis_sample_ate.spskill
+spskill<-linearHypothesis(cov_means[[10]], hypothesis_sample_ate.spskill)
+spskill
+```
+
+```{r}
+hypothesis_sample_ate.jobs <- paste0("ntile1 = ", paste0("ntile", seq(2, num_tiles)))
+hypothesis_sample_ate.jobs
+jobs<-linearHypothesis(cov_means[[1]], hypothesis_sample_ate.jobs)
+jobs
+```
+
+```{r}
+hypothesis_sample_ate.honors <- paste0("ntile1 = ", paste0("ntile", seq(2, num_tiles)))
+hypothesis_sample_ate.honors
+honors<-linearHypothesis(cov_means[[3]], hypothesis_sample_ate.honors)
+honors
+```
+
+```{r}
+hypothesis_sample_ate.email <- paste0("ntile1 = ", paste0("ntile", seq(2, num_tiles)))
+hypothesis_sample_ate.email
+email<-linearHypothesis(cov_means[[8]], hypothesis_sample_ate.email)
+email
+```
+
+For the four resume characteristic related variables chosen in Q4,  the mean difference of theses variables across three groups is statistically significant at 5% significance rate. Which means that there is evidence that the heterogeneous treatment effect exists related to these four regressors, ï..ofjobs, honors, specialskills, email.
+
+### I.2.6
+
+Y.hat is estimates of the expected responses E[Y | Xi], marginalizing over treatment. If Y.hat = NULL, these are estimated using a separate regression forest. Generally, this statement is used when marginal outcomes are known through prior means (as might be the case in a randomized trial).
+
+### II.1
+
+This derivation for pseudo-outcome is similar to the derivation I got for the first question, that I will do the derivation based on the moment function when $x_i = x$, and I will do the estimate based on the equation $\hat{\theta _C}\:=\:\hat{\theta _P}-\frac{1}{n_C}\sum \xi ^,A_P^{-1}\psi _P\left(O_i\right)$, where $A_P=\frac{1}{n_P}\sum \Delta \psi _P\left(O_i\right)$.
+
+But in this question, I know that it is with confounding, that $callback = β_0(x) + blackτ(x) + u$ and $p_i = A_p^{-1}(Z_i-\bar{Z_p})(callback_i-\bar {callback_p}-(black_i-\bar{black_p})\hat τ_P)$, and in this case $A_P = \frac{1}{n_P}\sum \left(\left(Z_i-\bar{Z_P}\right)\left(black_i-\overline{black_P}\right)\right)$. And we will going to split the tree based on $p_i$.
+
+### II.2
+
+The histogram is rather spread out, which means that it does imply that the treatment effect is heterogenous. Although there does exist the possibility that we were simply underpowered and the tree did not split or the histogram may spread out due to overfitting and producing noisy estimates.
+
+### II.3
+
+Listing the normalized variance from the biggest to the smallest, we get the sequence, FAMINC, AGEM, YEARSCHM. Bigger value means more important in defining treatment effect heterogeneity. Thus we know that among the three variables, FAMINC seems to be mattering most for the heterogeneous treatment effect.

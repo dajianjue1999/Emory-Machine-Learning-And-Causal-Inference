@@ -1,0 +1,208 @@
+---
+title: "Assignment3"
+author: "Daoyang E"
+date: "10/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#For 2SLS
+if(!require(AER)){
+  install.packages("AER")
+  library(AER)
+  }
+#For robust standard error
+if(!require(lmtest)){
+  install.packages("lmtest")
+  library(lmtest)
+  }
+if(!require(sandwich)){
+  install.packages("sandwich")
+  library(sandwich)
+}# To read SAS data file
+if(!require(haven)){
+  install.packages("haven")
+  library(haven)
+  }
+```
+
+```{r}
+library(dplyr)
+```
+
+
+```{r}
+library(haven)
+#import m_d_903.sas7bdat
+ori <-read_sas("AngEv98/m_d_903.sas7bdat")
+```
+
+```{r}
+df <- ori[,c("HOUR89M", "KIDCOUNT", "AGEM", "RACEM", "YEARSCHM", "SEXK", "SEX2NDK", "TWIN1ST", "MULTI2ND", "FAMINC")]
+df$AGEM <- as.numeric(df$AGEM)
+df$RACEM <- as.numeric(df$RACEM)
+df$SEXK <- as.numeric(df$SEXK)
+df$SEX2NDK <- as.numeric(df$SEX2NDK)
+df$TWIN1ST <- as.numeric(df$TWIN1ST)
+df$MULTI2ND <- as.numeric(df$MULTI2ND)
+df$YEARSCHM <- as.numeric(df$YEARSCHM)
+df$HOUR89M <- as.numeric(df$HOUR89M)
+df$FAMINC <- as.numeric(df$FAMINC)
+```
+
+```{r}
+summary(df)
+```
+
+
+### 1
+
+```{r}
+ols.fit <- lm(HOUR89M ~ KIDCOUNT + YEARSCHM + AGEM + FAMINC, data = df)
+coeftest(ols.fit, vcov = vcovHC(ols.fit, type="HC1"))
+```
+
+The OLS estimate suggests that as the number of kids increase by 1, the hours worked decreases by around 3.45
+on average holding years education, age and family income fixed. It is statistically significant under 1% level
+significance level.
+
+### 2
+
+The two conditions for the twins variable to be a valid IV is that
+First, Cov(z,u) = 0, in this case, it would be the case that the covariance between the twins variable and u is zero, that twins variable is exogeneous to the equation.
+Second, Cov(z, x) not equal to 0, that is the case that twins variable is related to number of kids in this case.
+I think that twins variable could be a good IV here since twins seem to be related with number of kids here.
+
+### 3
+
+```{r}
+# Run first stage
+firstStage.fit <- lm(KIDCOUNT ~ TWIN1ST + YEARSCHM + AGEM + FAMINC, data=df)
+# Test individaully
+coeftest(firstStage.fit, vcov = vcovHC(firstStage.fit, type="HC1"))
+```
+
+```{r}
+# Save fitted values to use in the 2nd stage
+df$kidshat <- firstStage.fit$fitted.values
+# save residuals for endogeneity test
+df$kidsresid <- firstStage.fit$residuals
+```
+
+Here we see that the t-test is very significant (significant with 1% significance level) and t statistic is 71 which is much larger than 10, which means that twins variable does relates with number of children variable and this is not a weak IV.
+
+### 4
+
+```{r}
+secondStage.fit <- lm(HOUR89M ~ kidshat + YEARSCHM + AGEM + FAMINC, data = df)
+summary(secondStage.fit)
+```
+
+The partial effect of the number of kids on the hours worked per week holding other
+things fixed is that one unit increase in number of kids would lead to 2.2 hour decrease in weekly hours worked. The standard error I have obtained here is not valid since I am running regression with one regressor estimated.
+
+### 5
+
+```{r}
+tsls.fit <- ivreg(HOUR89M ~ KIDCOUNT + YEARSCHM + AGEM + FAMINC|TWIN1ST + YEARSCHM + AGEM + FAMINC , data = df)
+summary(tsls.fit, vcov = sandwich, diagnostics = TRUE)
+```
+
+The parameter estimate for the kids variable is identical to the number that we obtained manually. And the partial effect is statistically significant based on the robust standard error since we have seen that the value is significant with 1% significance level.
+
+### 6
+
+The reason that when we drop the households with single child, the IV we had before which is whether the first child
+was twins or not is not meaningful anymore is that we are considering same sex IV now, if the first child was twins, then their second child will necessarily be twins, and they will be of the same sex and it's likely for the parents to get another child. This idea overlaps a lot with what we want to consider as our IV now, this may lead to the problem of collinearity.  Since we want to use our new IV, same sex, we would not consider our previous IV anymore.
+
+### 7
+
+```{r}
+df.new <- df %>% filter(KIDCOUNT != 1)
+df.new <- cbind(df.new, SAMESEX = 0)
+```
+
+```{r}
+for(i in 1 : 666384){
+  if(df.new$SEXK[i] == df.new$SEX2NDK[i]){
+    df.new$SAMESEX[i] = 1
+  }else{
+    df.new$SAMESEX[i] = 0
+  }
+}
+```
+
+```{r}
+# Run first stage
+firstStage.fit.new <- lm(KIDCOUNT ~ SAMESEX + MULTI2ND + YEARSCHM + AGEM + FAMINC, data = df.new)
+# Test individually
+coeftest(firstStage.fit.new, vcov = vcovHC(firstStage.fit.new, type="HC1"))
+# Test jointly
+linearHypothesis(firstStage.fit.new, c("SAMESEX = 0", " MULTI2ND = 0"), vcov = vcovHC(firstStage.fit.new, type = "HC1"), test = "F")
+```
+
+```{r}
+# Save fitted values to use in the 2nd stage
+df.new$kidshat <- firstStage.fit.new$fitted.values
+# save residuals for endogeneity test
+df.new$kidsresid <- firstStage.fit.new$residuals
+```
+
+```{r}
+secondStage.fit.new <- lm(HOUR89M ~ kidshat + YEARSCHM + AGEM + FAMINC, data = df.new)
+summary(secondStage.fit.new)
+```
+
+
+```{r}
+tsls.fit.new <- ivreg(HOUR89M ~ KIDCOUNT + YEARSCHM + AGEM + FAMINC|SAMESEX + MULTI2ND + YEARSCHM + AGEM + FAMINC , data = df.new)
+summary(tsls.fit.new, vcov = sandwich, diagnostics = TRUE)
+```
+
+We see that, both the estimates for kidcount has a coefficient of -2.553, and has a p value very small that shows 1% level of significance. 
+
+### 8
+
+```{r}
+ols.fit.new <- lm(HOUR89M ~ KIDCOUNT + YEARSCHM + AGEM + FAMINC, data = df.new)
+summary(ols.fit.new)
+```
+
+
+```{r}
+wu.hausman<-(coef(tsls.fit.new)[2]-coef(ols.fit.new)[2])/sqrt(vcov(tsls.fit.new)[2,2]-vcov(ols.fit.new)[2,2])
+wu.hausman^2
+```
+
+The null hypothesis is that both of the estimators are consistent. Here the WU-HAUSMAN statistics is 5.98843 and has a p-value of 0.0156. We could reject the null hypothesis in this case, thus it means that one of the estimators is not consistent, which means endogeneity.
+
+### 9
+
+```{r}
+df.fit <- lm(HOUR89M ~ KIDCOUNT + YEARSCHM + AGEM + FAMINC + kidsresid, data = df.new)
+summary(df.fit)
+```
+
+```{r}
+linearHypothesis(df.fit, c("kidsresid = 0"),vcov = vcovHC(df.fit, type="HC1"))
+```
+
+The result is same as previous question. The null hypothesis is that the residual for kidcount is zero, which is that the two estimators are consistent. Here the WU-HAUSMAN statistics is 5.98843 and has a p-value of 0.0156. We could reject the null hypothesis in this case, thus it means that one of the estimators is not consistent, which means endogeneity.
+
+### 10
+
+```{r}
+res <- tsls.fit.new$residuals
+fittemp <- lm(res ~ SAMESEX + MULTI2ND + YEARSCHM + AGEM + FAMINC, data = df.new)
+summ <- summary(fittemp)
+summ$r.squared * nrow(df.new)
+pval <- 1 - pchisq(summ$r.squared * nrow(df.new), df = 1)
+pval
+```
+
+Sargan’s test for testing whether IVs are exogenous. The null hypothesis is that $H_0$: Both SAMESEX and MUTTI2ND are exogeneous. The p-value is `r pval`. We are not able to reject the null hypothesis. Hence it passes the test and both of the IV variables are exogeneous.
+
+### 11
+
+Based on the above findings, I think the number of kids is endogenous. And the partial effect is overestimated with OLS, since we see that for OLS regression, the absolute value for the coefficient for KIDCOUNT is larger than the absolute value for the coefficient from the IV regression. I think the findings make sense, since the results also show that we have chosen two exogeneous IV variables, the whole process is correct, thus we could get reasonable results.

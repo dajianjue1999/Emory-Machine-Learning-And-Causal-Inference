@@ -1,0 +1,239 @@
+---
+title: "project"
+author: "Daoyang E"
+date: "11/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(randomForest)
+library(MatchIt)
+library(optmatch)
+library(randomForest)
+library(ggplot2)
+library(tree)
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+library(dplyr)
+library(sqldf)
+```
+
+
+```{r}
+rawdata = read.csv("https://raw.github.com/grf-labs/grf/master/experiments/acic18/synthetic_data.csv")
+```
+
+```{r}
+data.all <- rawdata
+```
+
+```{r}
+set.seed(50)
+data.all$schoolid = factor(data.all$schoolid)
+w.lm = glm(Z ~ ., data = data.all[,-3], family = binomial)
+summary(w.lm)
+pscore=predict(w.lm, type="response")
+```
+
+
+```{r}
+psmatch_whole <- NA
+for(i in 1:76){
+set.seed(6699)
+data_subset <- data.all[data.all$schoolid==i,]
+rf<-randomForest(Z~S3+C1+C2+C3,data=data_subset)
+data_subset$pscore=predict(rf)
+
+logit<-glm(Z~S3+C1+C2+C3,data=data_subset, family = binomial)
+data_subset$pscore_logit=predict(logit, type="response")
+
+psmatch_result<-matchit(Z~S3+C1+C2+C3,distance=data_subset$pscore,data=data_subset,method="full")
+psmatch_data<-match.data(psmatch_result)
+
+
+psmatch_whole <- rbind(psmatch_whole, psmatch_data)
+}
+psmatch_whole <- psmatch_whole[-1,]
+```
+
+
+
+
+```{r}
+CATE <- NA
+for(i in 1:76){
+  S <-psmatch_whole %>% filter(schoolid == i)
+  subclass.length <- length(unique(S$subclass))
+  for(j in 1:subclass.length){
+    s <-S %>% filter(subclass == j)
+    s1<-s %>% filter(Z == 1)
+    s0 <- s %>% filter(Z == 0)
+    cate<- c(i, j, sum(s1$Y)/sum(s$Z==1)-sum(s0$Y)/sum(s$Z == 0))
+    CATE <- rbind(CATE,cate)
+  }
+}
+CATE <- CATE[-1,]
+```
+
+```{r}
+CATE.df <- as.data.frame(CATE, column.names = c("schoolid", "subclass", "CATE"))
+```
+
+```{r}
+names(CATE.df)[names(CATE.df) == "V1"] <- "schoolid"
+names(CATE.df)[names(CATE.df) == "V2"] <- "subclass"
+names(CATE.df)[names(CATE.df) == "V3"] <- "CATE"
+```
+
+```{r}
+for(i in 1:10391){
+ psmatch_whole$CATE[i] <- CATE.df$CATE[which(CATE.df$schoolid==psmatch_whole$schoolid[i]&CATE.df$subclass==psmatch_whole$subclass[i])]
+}
+```
+
+
+/```{r}
+ATE <- NA
+for(i in 1:76){
+  D <- CATE.df %>% filter(schoolid == i)
+  subclass.length <- length(unique(D$subclass))
+  ate <- c(i,sum(D$CATE)/subclass.length)
+  ATE <- rbind(ATE, ate)
+}
+ATE <- ATE[-1,]
+```
+
+/```{r}
+ATE.df <- as.data.frame(ATE, column.names = c("schoolid", "ATE"))
+```
+
+/```{r}
+names(ATE.df)[names(ATE.df) == "V1"] <- "schoolid"
+names(ATE.df)[names(ATE.df) == "V2"] <- "ATE"
+```
+
+/```{r}
+ATE.f <- sum(ATE.df$ATE)/76
+```
+
+```{r}
+psmatch_whole <- arrange(psmatch_whole,schoolid)
+psmatch_whole$ATE <- 0
+```
+
+```{r}
+for(i in 1:76){
+  D <- psmatch_whole %>% filter(schoolid == i)
+  school.length <- nrow(D)
+  ate <- sum(D$CATE)/school.length
+  psmatch_whole[which(psmatch_whole$schoolid==i),]$ATE <- ate
+}
+```
+
+```{r}
+ate.total <- 0
+for(i in 1:76){
+  temp <- psmatch_whole%>%filter(schoolid==i)
+  ate.total <- ate.total+temp$ATE[1]
+}
+(ate.final.school <- ate.total/76)
+```
+
+```{r}
+(ate.Final.student <- sum(psmatch_whole$CATE)/10391)
+```
+
+
+```{r}
+psmatch_whole_logit <- NA
+for(i in 1:76){
+set.seed(6699)
+data_subset <- data.all[data.all$schoolid==i,]
+logit<-glm(Z~S3+C1+C2+C3,data=data_subset, family = binomial)
+data_subset$pscore_logit=predict(logit, type="response")
+
+psmatch_result_logit<-matchit(Z~S3+C1+C2+C3,distance=data_subset$pscore_logit,data=data_subset,method="full")
+psmatch_data_logit<-match.data(psmatch_result_logit)
+
+
+psmatch_whole_logit <- rbind(psmatch_whole_logit, psmatch_data_logit)
+}
+psmatch_whole_logit <- psmatch_whole_logit[-1,]
+```
+
+
+```{r}
+CATE <- NA
+for(i in 1:76){
+  S <-psmatch_whole_logit %>% filter(schoolid == i)
+  subclass.length <- length(unique(S$subclass))
+  for(j in 1:subclass.length){
+    s <-S %>% filter(subclass == j)
+    s1<-s %>% filter(Z == 1)
+    s0 <- s %>% filter(Z == 0)
+    cate<- c(i, j, sum(s1$Y)/sum(s$Z==1)-sum(s0$Y)/sum(s$Z == 0))
+    CATE <- rbind(CATE,cate)
+  }
+}
+CATE <- CATE[-1,]
+```
+
+```{r}
+CATE.df_logit <- as.data.frame(CATE, column.names = c("schoolid", "subclass", "CATE"))
+```
+
+```{r}
+names(CATE.df_logit)[names(CATE.df_logit) == "V1"] <- "schoolid"
+names(CATE.df_logit)[names(CATE.df_logit) == "V2"] <- "subclass"
+names(CATE.df_logit)[names(CATE.df_logit) == "V3"] <- "CATE"
+```
+
+```{r}
+for(i in 1:10391){
+ psmatch_whole_logit$CATE[i] <- CATE.df_logit$CATE[which(CATE.df_logit$schoolid==psmatch_whole_logit$schoolid[i]&CATE.df_logit$subclass==psmatch_whole_logit$subclass[i])]
+}
+```
+
+```{r}
+psmatch_whole_logit <- arrange(psmatch_whole_logit,schoolid)
+psmatch_whole_logit$ATE <- 0
+```
+
+```{r}
+for(i in 1:76){
+  D <- psmatch_whole_logit %>% filter(schoolid == i)
+  school.length <- nrow(D)
+  ate <- sum(D$CATE)/school.length
+  psmatch_whole_logit[which(psmatch_whole_logit$schoolid==i),]$ATE <- ate
+}
+```
+
+```{r}
+ate.total_logit <- 0
+for(i in 1:76){
+  temp <- psmatch_whole_logit%>%filter(schoolid==i)
+  ate.total_logit <- ate.total+temp$ATE[1]
+}
+(ate.final.school_logit <- ate.total_logit/76)
+```
+
+```{r}
+(ate.Final.student_logit <- sum(psmatch_whole_logit$CATE)/10391)
+```
+
+```{r}
+hist(psmatch_whole$CATE,breaks = 40,main = "Treatment Effect Estimate using RF")
+abline(v = ate.final.school,col="blue")
+text(x = 2, label = "ATE_est = 0.277")
+```
+
+```{r}
+hist(psmatch_whole_logit$CATE,breaks = 40,main = "Treatment Effect Estimate using RF")
+abline(v = ate.final.school_logit,col="blue")
+text(x = 2, label = "ATE_est = 0.251")
+```
+

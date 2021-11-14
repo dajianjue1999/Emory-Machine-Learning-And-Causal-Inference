@@ -1,0 +1,423 @@
+---
+title: "Midterm"
+author: "Daoyang E"
+date: "10/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tibble)
+library(dplyr)
+library(car)
+```
+
+### 1
+
+I disagree with the statement, particularly with the part that "For each approach, you obtained p + 1 models containing {0, 1,...,p} predictors." For the best subset approache, I would get a model number of $2^p$, instead of $p+1$. And for the other two approaches, I would also get a model number more than $p+1$, though not as much as the best subset selection method. For the remaining part, I do agree with the statement that best subset would give the smallest RSS for the training set, but for the test set, it would not be clear which one has smaller RSS until computed.
+
+### 2
+
+The reason that $R^2$ could not be used is that adding an extra regressor would lead $R^2$ increasing. But by using AIC or BIC, we would penalize the decreased RSS by increasing a penalizing value. If the increased penalization overvalues the decreased RSS, then we could say that this model size is not a good fit. Generally, we choose AIC and BIC because they can penalize increased model complexity.
+
+### 3
+
+As the model flexibility increase, bias would decrease but the variance would increase. Hence the logic is that, when $\lambda$ increase, the variance would decrease at the expense of increased bias. As a result, we are finding the tuning parameter that balances the bias-variance trade off using the data. Generally, in the last step of comparing different selection methods, the method that gives smallest MSE, in this case, the prediction error.
+
+### 4
+
+The reason that for random forest, each split of the tree only considers a subset of randomly chosen variables is that we want to build trees that are very different across each of the bootstrap samples. To achieve this goal, when growing trees, for each tree, for each split, we select m < p variables randomly and among the m predictors that are selected we would select the optimal predictor for split along with the optimal split point.
+By choosing random forest, we can get de-correlated trees and reduce the variance futher.
+
+### 5
+
+The two shrinkage methods have different restrictions. Although the two methods both try to increase accuracy of
+the prediction by putting restrictions, LASSO has an extra property of choosing variables. In other words, some of the parameter estimates can be exactly zero when the model is estimated by LASSO. This is occured because of LASSO's Square shape of restriction set. Min RSS will generally contact restriction area on axis for LASSO. While for Ridge, this generally would not happen.
+
+### 6
+
+I would test if $x_1$ is endogenous or not based on the regression based Wu-Hausman test. The null hypothesis is that there is no endogeneity, in other words, that there is no difference between 2SLS and OLS estimation results. In this particular case, if I want to do the regression based test. I would first run a linear regression model of $x_1$ on the other estimators and the IVs, in the form that $x = \hatπ_0 + \hatπ_1z_1 + π_2z_2 +\hatπ_3z_3 + r\hatπ_r + \hat v$, where r stands for exogeneous variables $x_2, x_3,...x_k$. And $\hat v$ is the residual. Then the regression based test is based on the second regression, which adds the first stage residual into the model, now the model is $y = \beta_0 + \beta_1x_1 + \beta_2x_2 + ··· + \beta_kx_k + p\hat v+u$. The null hypothesis is that p = 0, here p is the coefficient for $\hat v$. If the null hypothesis is rejected, then $x_1$ is endogeneous.
+
+### 7
+
+We test if all the IVs are exogeneous using Sargan's test. Which is the model $\hat u = δ_0 + δ_1z_1 + δ_2z_2 + δ_3z_3 + rβ_r + e$, as the above question, r stands for exogeneous variables $x_2, x_3,...x_k$. And u is the 2SLS residual. If all instruments are exogenous, the 2SLS residuals should be uncorrelated with the instruments, up to sampling
+error. So the null hypothesis is that $H_0$: $z_1,z_2,z_3$ are all exogeneous. The test statistics is $nR^2 → χ^2_2$,here we have two extra IVs so the degree of freedom is 2. If I could not reject the null hypothesis, then it means that the IVs are al exogeneous.
+
+### 8
+
+Define $W_i = 1$ indicating that unit i received the treatment. Then, the realized outcome would be $Y_i^{obs} = Y_i(W_i) = Y_i(0)$ if $W_i = 0$ and $Y_i(W_i) = Y_i(1)$ if $W_i = 1$. $X_i$ has k features, so our data is a random sample of $(Y^{obs}_i, X_i, W_i)$, I also get two assumptions, the unfoundedness and stable unit treatment value assumption. Then a regression model is built, in the form of $Y_i = µ_0 + W_iτ_{ATE} + ε_i$. We also suppose that  $cov(z_i, ε_i) = 0$. 2SLS will be used,  the first stage becomes estimating the first stage equation as before but using a model for the binary dependent variable such as the probit model:
+$E[W_i|z_i] = pr(W_i = 1|z_i, Xi) = Φ (π_0 + π_1z_i + X_iπ_x)$.
+Second stage is running a regression of Y on W and X with $Φ (\hatπ_0 + \hatπ_1z_i + X_i\hatπ_x)$ as an IV. We could get the estimation by following the above process.
+
+### 9
+
+```{r}
+#after
+ag = 0.33*0.67 + 0.82*0.18
+```
+
+```{r}
+a = 0.33*0.06+0.82*0.11
+b = 0.17-a
+before <- 0.11/0.17
+bg = before*(1-before)*2
+```
+
+```{r}
+bg - ag
+```
+
+We see that the decreased Gini index is about 0.088 by splitting.
+
+### 10
+
+```{r}
+1/9
+```
+
+By using the classification algorithm, the test set would have y value of {1, 0, 1, 1, 0, 1, 1, 0, 1}, which is one unit different with the true test set y value. so according to the equation, the misclassification error rate would be $1/9$, or in number $0.11111$.
+
+### 11
+
+For the tree of the left, the y values is each of the node from left to right is
+
+1.0                                 2.0                                   3.3
+0.0                                 2.0                                   3.0
+0.0                                                                       3.0
+                                                                          3.0
+                                                                          3.0
+so $\hat y$ will be $1/3$, $2$ and $3.06$ respectively
+
+for the tree on the right, the y values of each node from left to right is
+
+2.0                                 1.5                                   3.0
+0.0                                 1.0                                   3.3
+0.0                                 3.0                                   3.3
+                                    3.0                                   
+so $\hat y$ will be $2/3$, $2.125$ and $3.2$ respectively.
+
+The values that would produce an OOB is 170, 308, 532, 242, 357, 111
+
+Their respective prediction is that
+for 170, $\hat y = (3.06 + 3.2)/2 = 3.13$
+for 308, $\hat y = 3.2$
+for 532, $\hat y = 3.2$
+for 242, $\hat y = 1/3$
+for 357, $\hat y = 3.06$
+for 111, $\hat y = 3.06$.
+
+OOB error is MSE, so we would get mse as
+
+```{r}
+((3.13-3.0)^2+(3.2-2.0)^2+(3.2-0.0)^2+(1.5-1/3)^2+(2.0-3.06)^2+(3.06-0)^2)/6
+```
+
+So, the result is that the OOB error is 3.9242
+
+### 12
+
+for the left tree, the y values on the left node before $x_1$ splits is $1.0, 0.0, 0.0, 2.0, 2.0$, so the predicted $\hat y$ has a value of $1.0$, so the RSS on the left before splitting is
+
+```{r}
+RSSLB <- (1-1)^2+(0-1)^2+(0-1)^2+(2-1)^2+(2-1)^2
+RSSLB
+```
+
+While the RSS on the left after splitting is 
+
+```{r}
+RSSLA <- (1-1/3)^2+(0-1/3)^2+(0-1/3)^2+(2-2)^2+(2-2)^2
+RSSLA
+```
+
+reduced RSS is 
+
+```{r}
+RSS.reduced.L <- RSSLB - RSSLA
+```
+
+
+for the right tree, the y values on the left node before $x_1$ splits is $2.0, 0.0, 0.0, 1.5, 1.0, 3.0, 3.0$, so the predicted $\hat y$ has a value of $1.5$, so the RSS on the right before splitting is
+
+```{r}
+RSSRB <- (2-1.5)^2+(0-1.5)^2+(0-1.5)^2+(1.5-1.5)^2+(1-1.5)^2+(3-1.5)^2+(3-1.5)^2
+RSSRB
+```
+
+the RSS after splitting is 
+
+```{r}
+RSSRA <- (2-2/3)^2+(0-2/3)^2+(0-2/3)^2+(2.125-1.5)^2+(2.125-1)^2+(2.125-3)^2+(2.125-3)^2
+RSSRA
+```
+
+reduced RSS is 
+
+```{r}
+RSS.reduced.R <- RSSRB - RSSRA
+```
+
+average
+
+```{r}
+(RSS.reduced.L+RSS.reduced.R)/2
+```
+
+so averaging the reduced RSS on both trees will give a value of 3.489583, which is the variable importance of $x_1$ we get from the method of reduced RSS.
+
+### 13
+
+We already fit bagging with two trees, For the first tree, during fitting, we get OOB prediction error for each data point and averaged, just as the answer we get from question 11. After this part, I would permute the values of the predictor variable in the OOB set and again fit a tree and record the OOB error. The difference between the two OOB error is recorded. Then I would do the same thing on the second tree, and also record the difference.Averaging these two differences and normalize the difference by the standard deviation of the two differences.
+
+### 14
+
+```{r}
+df <- tribble(
+~ID, ~y, ~x1, ~x2, ~x3, ~x4, ~x5,
+353, 0.00, 1.09, 0, 0.89, 2, 25,
+385, 1.50, 1.59, 0, 1.19, 1, 45,
+388, 3.00, 0.89, 0, 0.89, 1, 15,
+455, 0.00, 1.39, 0, 1.19, 1, 35,
+438, 1.00, 0.99, 0, 0.59, 3, 45,
+550, 0.00, 1.59, 0, 1.19, 3, 35,
+466, 0.00, 0.99, 0, 0.59, 1, 15,
+64, 0.00, 1.39, 0, 1.19, 4, 75,
+342, 1.00, 1.29, 0, 0.89, 2, 45,
+154, 1.00, 1.29, 0, 0.89, 4, 65,
+296, 2.00, 1.19, 1, 1.19, 3, 35,
+422, 0.50, 0.59, 0, 0.59, 2, 35,
+100, 0.33, 0.99, 1, 0.59, 5, 35,
+421, 0.00, 0.79, 0, 0.59, 5, 85,
+248, 1.33, 1.19, 1, 1.19, 3, 45,
+199, 2.00, 0.59, 1, 0.59, 2, 65,
+365, 0.67, 0.59, 0, 0.59, 2, 75,
+85, 0.00, 1.09, 1, 0.89, 2, 35,
+593, 2.00, 1.29, 0, 0.89, 4, 55,
+415, 0.00, 0.79, 0, 0.59, 2, 75,
+295, 1.00, 1.19, 1, 1.19, 2, 130,
+653, 0.00, 1.59, 0, 1.19, 3, 65,
+132, 5.00, 0.59, 0, 0.59, 2, 65,
+588, 0.00, 0.99, 0, 0.59, 4, 25,
+204, 3.00, 0.99, 1, 0.59, 2, 45,
+169, 1.00, 1.39, 1, 1.19, 2, 25,
+657, 2.00, 0.59, 0, 0.59, 4, 65,
+241, 1.00, 1.39, 1, 1.19, 4, 130,
+20, 10.00, 1.39, 1, 1.19, 5, 85,
+330, 1.00, 0.59, 0, 0.59, 3, 25
+)
+```
+
+```{r}
+f.obs.id <- tribble(~ID, 342, 132, 422, 588, 204, 385, 100, 295, 657, 154, 415, 330, 653, 20, 169, 421, 455, 353, 248, 296)
+f.split.id <- tribble(~ID, 342, 422, 204, 385, 100, 657, 154, 653, 169, 296)
+s.obs.id <- tribble(~ID, 388, 466, 295, 588, 241, 342, 385, 20, 550, 204, 64, 438, 421, 85, 154, 199, 422, 653, 169, 455)
+s.split.id <- tribble(~ID, 466, 241, 342, 385, 204, 438, 421, 154, 653, 455)
+```
+
+so the IDs for the values used as the estimation set for the first tree is $132, 588, 295, 415, 330, 20, 421, 455, 353, 248$,
+estimating their values, I could get the $\hat y$ for the tree nodes, respectively, they are
+10,       0,      1/3,     1.466
+
+The IDs for the value used as estimation for the second tree is $388, 295, 588, 20, 550, 64, 85, 199, 422, 169$.
+The $\hat y$ is 
+0.875,    0,   NA,    2.8
+
+The IDs in oob for rhe first tree is $388, 438, 550, 466, 64, 199, 365, 85, 593, 241$, the IDs of oob for the second tree is $353, 296, 100, 248, 365, 593, 415, 132, 657, 330$
+
+Their respective prediction is
+```{r}
+x = 28;
+if(df$x1[x]>=1.2){
+  if(df$x4[x]>=3){
+    y = 10;
+  }
+  else{
+    y = 0;
+  }
+}
+if(df$x1[x]<1.2){
+  if(df$x5[x] < 40){
+    y = 1/3;
+  }
+  else{
+    y = 1.466;
+  }
+}
+y
+```
+
+```{r}
+n = 30;
+if(df$x2[n]==0){
+  if(df$x5[n]<40){
+    m = 0.875;
+  }
+  if(df$x5[n]>=40){
+    if(df$x5[n]>=55){
+      m = 0;
+    }
+    else{
+      m = NA;
+    }
+  }
+}
+if(df$x2[n]==1){
+  m = 2.8;
+}
+m
+```
+
+
+for 388, $\hat y =$ 1/3,
+for 438, $\hat y =$ 1.466,
+for 550, $\hat y =$ 10,
+for 466, $\hat y =$ 1/3,
+for 64, $\hat y =$ 10,
+for 199, $\hat y =$ 1.466,
+for 365, $\hat y =$ (1.466+0)/2 = 0.733,
+for 85, $\hat y =$ 1/3,
+for 593, $\hat y$ = (10 + 0)/2 = 5,
+for 241, $\hat y$ = 10,
+for 353, $\hat y$ = 0.875,
+for 296, $\hat y$ = 2.8,
+for 100, $\hat y$ = 2.8, 
+for 248, $\hat y$ = 2.8,
+for 415, $\hat y$ = 0,
+for 132, $\hat y$ = 0,
+for 657, $\hat y$ = 0,
+for 330, $\hat y$ = 0.875,
+
+thus the oob error would be
+
+```{r}
+((3 - 1/3)^2 + (1 - 1.466)^2 + (0 - 10)^2 + (0 - 1/3)^2 + (0 - 10)^2 + (2 - 1.466)^2 + (0.67 - 0.733)^2 + (0 - 1/3)^2 + (2 - 5)^2 + (1 - 10)^2 + (0 - 0.875)^2 + (2 - 2.8)^2 + (0.33 - 2.8)^2 + (1.33 - 2.8)^2 + (0 - 0)^2 + (5 - 0)^2 + (2 - 0)^2 + (1 - 0.875)^2)/18
+```
+
+Thus I see that the OOB error would be of the value 18.6957
+
+### 15
+
+```{r}
+# Packages required for causal tree
+if(!require(devtools)){
+install.packages("devtools")
+library(devtools)
+}
+install_github('susanathey/causalTree')
+library(causalTree)
+```
+
+```{r}
+# Load the data
+df<-read.csv(file="bw_smoking.csv")
+```
+
+```{r}
+# split the data into split and the estimation set
+# first create the index for split set
+split_size <- floor(nrow(df) * 0.5)
+RNGkind(sample.kind = "Rounding")
+set.seed(100)
+split_idx <- sample(nrow(df), replace=FALSE, size=split_size)
+# Now we have data for split and data for estimation
+df_split <- df[split_idx,]
+df_est <- df[-split_idx,]
+```
+
+```{r}
+outcome_variable_name <- "birthweight"
+treatment_variable_name <- "smoker"
+covariate_names <- c("ï..nprevist", "alcohol", "tripre1", "tripre2", "tripre3", "tripre0", "unmarried", "educ", "age", "drinks")
+```
+
+```{r}
+fmla_ct <- paste("birthweight ~", paste(covariate_names, collapse = " + "))
+fmla_ct
+```
+
+
+```{r}
+ct_unpruned <-honest.causalTree(formula = fmla_ct,# Define the model
+                                data=df_split,# Subset used to create tree structure
+                                est_data=df_est,# Which data set to use to estimate effects
+                                treatment=df_split$smoker,# Splitting sample treatment variable
+                                est_treatment=df_est$smoker,# Estimation sample treatment variable
+                                split.Rule="CT",# Define the splitting option
+                                cv.option="TOT",# Cross validation options#cv.option="CT",
+                                split.Honest=TRUE,# Use honesty when splitting
+                                cv.Honest=TRUE,# Use honesty when performing cross-validation
+                                minsize=12,# Min. number of treatment and control cases in each leaf
+                                HonestSampleSize=nrow(df_est))
+```
+
+```{r}
+ct_cptable <-data.frame(ct_unpruned$cptable)# Obtain optimal complexity parameter to prune tree.
+selected_cp_index <-which.min(ct_cptable$xerror)
+optim_cp_ct <- ct_cptable[selected_cp_index, "CP"]# Prune the tree at optimal complexity parameter.
+ct_pruned <-prune(tree=ct_unpruned, cp=optim_cp_ct)
+```
+
+```{r}
+rpart.plot(x=ct_pruned,# Pruned tree
+           type=3,# Draw separate split labels for the left and right directions
+           fallen=TRUE,# Position the leaf nodes at the bottom of the graph
+           leaf.round=1,# Rounding of the corners of the leaf node boxes
+           extra=100,# Display the percentage of observations in the node
+           branch=.1,# Shape of the branch lines
+           box.palette="BuGn")# Palette for coloring the node
+```
+
+```{r}
+tauhat_ct_est <-predict(ct_pruned, newdata=df_est)
+table(round(tauhat_ct_est,3))
+```
+
+```{r}
+num_leaves <-length(unique(tauhat_ct_est))
+num_leaves
+# create indicator variable defined in the above equation
+df_est$leaf <-factor(tauhat_ct_est, labels =seq(num_leaves))
+# Run the regression
+ols_ct <-lm(as.formula("birthweight ~ 0 + leaf + smoker:leaf"), data=df_est)
+ols_ct_summary <- summary(ols_ct)
+coef(ols_ct_summary)
+```
+
+```{r}
+te_summary <- coef(ols_ct_summary)[(num_leaves+1):(2*num_leaves), c("Estimate", "Std. Error","t value","Pr(>|t|)")]
+te_summary
+```
+
+Generally, smoking negatively affect the birthweight except for the subgroup with mother's age smaller than 19. Although this effect is not significant at 5% significance level, so maybe it's just a misestimation.
+
+The model that is estimated to obtain the standard error and the p-value is
+$birthweight =α_1Leaf_1+α_2Leaf_2+···+α_7Leaf_7+β_1Leaf_1smoker+β_2Leaf_2smoker+···+β_7Leaf_7smoker+ε$
+Here $Leaf_j$ is a dummy variable indicating whether an observation belongs to $j^{th}$ leaf or not.
+
+The treatment effect for each leaf is estimated with $\hat β_j$.  Hence the null and alternative hypothesis for whether each of the heterogeneous treatment effect is significant or not is $H_0:β_j= 0, H_1:β_j\neq 0,j= 1,...,7$. Based on the p-value provided above, the 1st, 3rd and 4th leaf has significant treatment effect at the 5% significance level. Respectively they are with -354, -239 and -235 treatment effect. 
+
+We want to find the groups who are not affected by smoking, so the first of these groups is of age between 19 and 22, education smaller than 13 years and total number of prenatal visits greater than or equal to 13.
+The second of these groups is of age between 22 and 28, education smaller than 13 years and total number of prenatal visits greater than or equal to 13.
+The third of these groups is of age between 19 and 20, education smaller than 13 years and total number of prenatal visits smaller than 13.
+Last of these groups is of age smaller than 19.
+These four groups are not affected by smoking at 5% significance level.
+
+### 16
+
+```{r}
+summary(ols_ct)
+```
+
+```{r}
+hypothesis <- paste0("leaf1:smoker = leaf", seq(2, num_leaves), ":smoker")
+hypothesis
+```
+
+```{r}
+ftest <- linearHypothesis(ols_ct, hypothesis, test="F",white.adjust="hc1")
+ftest
+```
+
+Here we are testing whether the heterogeneous treatment effect estimated by the causal tree is indeed heterogeneous. The null and alternative hypothesis are $H0:β_1=β_2=···=β_7,H1:otherwise$
+The p-value is 0.039, so we reject the null hypothesis at 5% significance level. 
+Hence the heterogeneous treatment effect that we discovered by the tree is statistically significant in this circumstance.

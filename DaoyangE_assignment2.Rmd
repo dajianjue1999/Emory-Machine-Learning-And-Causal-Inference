@@ -1,0 +1,279 @@
+---
+title: "Assignment2"
+author: "Daoyang E"
+date: "9/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ISLR)
+library(tree)
+library(randomForest)
+library(ggplot2)
+```
+
+```{r}
+names(Hitters)
+
+# drop the observation if salary is missing
+df_hitters<-na.omit(Hitters)
+# replace Salary with ln(Salary) and name it into a new data frame df_ln_hitters
+df_ln_hitters<-df_hitters[,-19]
+df_ln_hitters$lnSalary<-log(df_hitters$Salary)
+```
+
+```{r}
+RNGkind(sample.kind = "Rounding")
+set.seed (527)
+train.index = sample (1: nrow(df_ln_hitters), nrow(df_ln_hitters)/2)
+```
+
+### III.1
+
+```{r}
+full.tree.Hitters = tree(lnSalary~., df_ln_hitters, subset = train.index, control = tree.control(length(train.index), mincut = 5, minsize = 10, mindev = 0.01))
+summary(full.tree.Hitters)
+```
+
+```{r}
+plot(full.tree.Hitters)
+text(full.tree.Hitters)
+```
+
+According to the summary, the number of terminal nodes in this full tree is 9. For my decision tree, the interpretation seems to be that, if the player already has large number of times at bat during his career and large number of times at bat during 1986, then number of cumulative runs batted and walks during 1986 seem to be important factors determining the player's salary.
+
+### III.2
+```{r}
+RNGkind(sample.kind = "Rounding")
+set.seed(20)
+n_folds <- 5
+cv_fold_index <- sample(c(1:n_folds), length(train.index), replace=TRUE)
+table(cv_fold_index)
+```
+
+```{r}
+cvtree <- cv.tree(full.tree.Hitters, K = 5, rand = cv_fold_index)
+data.frame(alpha = cvtree$k, mse = cvtree$dev, T = cvtree$size)
+```
+
+```{r}
+optimal_T <- cvtree$size[which.min(cvtree$dev)]
+optimal_alpha <- cvtree$k[which.min(cvtree$dev)]
+cat("The minium deviance alpha obtained by 5-fold cv is ", optimal_alpha)
+cat(", and the  corresponding tree size in the training set is ", optimal_T)
+```
+Thus I see that the optimal alpha chosen from the cross validation is 5.698752
+
+### III.3
+```{r}
+full.tree.train <- tree(lnSalary ~., df_ln_hitters, subset = train.index)
+final.tree.train <- prune.tree(full.tree.train, k = optimal_alpha)
+```
+
+```{r}
+dt.predict <- predict(final.tree.train, df_ln_hitters[-train.index,])
+dt.predictS <- exp(dt.predict)
+```
+
+```{r}
+dt.te <- mean((df_hitters$Salary[-train.index] - dt.predictS)^2)
+dt.te
+```
+
+```{r}
+sqrt(dt.te)
+```
+
+The prediction error is around 130533.6.  Hence decision tree model leads to predictions that are within around a little more than $361,000 (√130533.6) of the annual Salary.
+
+### IV.1
+
+```{r}
+bag.Hitters.train = randomForest(lnSalary~., data = df_ln_hitters, subset = train.index, mtry = 19, importance = TRUE, ntree = 700)
+
+bag.Hitters.train
+```
+
+```{r}
+resid = df_ln_hitters[train.index,]$lnSalary - bag.Hitters.train$predicted
+mse = mean(resid ^ 2)
+mse
+```
+
+```{r}
+plot(bag.Hitters.train)
+```
+
+Apparently, we already get enough number of trees since the mse line is going flat after the number of trees has reached around 200.
+
+### IV.2
+```{r}
+bag.Hitters.train$importance
+```
+
+```{r}
+varImpPlot(bag.Hitters.train, sort = TRUE, n.var = min(10, nrow(bag.Hitters.train$importance)), type = 2)
+```
+
+### IV.3
+```{r}
+bag.predict <- predict(bag.Hitters.train, newdata = df_ln_hitters[-train.index,])
+bag.predictS <- exp(bag.predict)
+```
+
+```{r}
+bag.te <- mean((df_hitters$Salary[-train.index] - bag.predictS)^2)
+bag.te
+```
+
+```{r}
+sqrt(bag.te)
+```
+
+The prediction error is around 104631.1.  Hence decision tree model leads to predictions that are within around a little more than $323,000 (√104631.1) of the annual Salary.
+
+### V.1
+```{r}
+rf.Hitters.train = randomForest(lnSalary~., data = df_ln_hitters, subset = train.index, importance =TRUE, ntree = 700)
+rf.Hitters.train
+```
+
+```{r}
+plot(rf.Hitters.train)
+```
+
+The default m in this case is 6 and I think we already have enough trees since the Error line has become flat after the number of trees reach about 150.
+
+### V.2
+```{r}
+min_m = 2
+max_m = 9
+for(i in min_m:max_m){
+  rf <- randomForest(lnSalary ~ ., data = df_ln_hitters, subset = train.index, ntree = 1000, mtry=i)
+  temp.df <- data.frame(oob_err = rf$mse, m = rep(i, length.out = 1000), ntree = c(1:1000))
+  if(i == min_m) {
+    final.df <- temp.df
+  }
+  else{
+    final.df <- rbind(final.df,temp.df)
+  }
+}
+```
+
+```{r}
+gout <- ggplot(data = final.df, aes(y = oob_err, x = ntree, group = factor(m), color = factor(m)))+
+  geom_point(size=0.5)+
+  scale_colour_brewer(palette = "Spectral")+
+  ylab("OOB MSE")+
+  xlab("Number of trees in bagging")+
+  theme(plot.title = element_text(hjust = 0.5, size = 14),
+  panel.background = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.title = element_text(size = 11),
+  axis.line = element_line(colour = "gray"))
+gout
+```
+### V.3
+```{r}
+num_tree<-1000
+chosen_m<-rep(NA,num_tree)
+corres_oob_err<-rep(NA,num_tree)
+#obtain optimal m and and corresponding OOB error for each number of trees.
+for (B in 1:num_tree) {
+final.df.ntree<-final.df[final.df$ntree==B,]
+chosen_m[B]<-final.df.ntree$m[which.min(final.df.ntree$oob_err)]
+corres_oob_err[B]<-final.df.ntree$oob_err[which.min(final.df.ntree$oob_err)]
+}
+#make into dataframe
+df.m.ntree<-data.frame(ntree=c(1:num_tree),m=chosen_m,oob_err=corres_oob_err)
+df.m.ntree$ntree[which.min(df.m.ntree$oob_err[-1])]
+```
+
+
+### V.4
+```{r}
+rf_min_m = 2
+rf_max_m = 6
+for(i in rf_min_m:rf_max_m){
+  rf_new <- randomForest(lnSalary ~ ., data = df_ln_hitters, subset = train.index, ntree = 1000, mtry=i)
+  rf.predict <- predict(rf_new, newdata = df_ln_hitters[-train.index,])
+  rf.predictS <- exp(rf.predict)
+  temp.df.new <- data.frame(test_err = mean((df_hitters$Salary[-train.index] - rf.predictS)^2), m = rep(i, length.out = 1000), ntree = c(1:1000))
+  if(i == rf_min_m) {
+    final.df.new <- temp.df.new
+  }
+  else{
+    final.df.new <- rbind(final.df.new, temp.df.new)
+  }
+}
+```
+
+```{r}
+gout.new <- ggplot(data = final.df.new, aes(y = test_err, x = ntree, group = factor(m), color = factor(m)))+
+  geom_point(size=0.5)+
+  ylab("Prediction MSE")+
+  xlab("Number of trees in random forest")+
+  theme(plot.title = element_text(hjust = 0.5, size = 14),
+  panel.background = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  axis.title = element_text(size = 11),
+  axis.line = element_line(colour = "gray"))
+gout.new
+```
+
+### V.5
+Based on the results in V3 and V4, my choice of m would be 4, and my number of trees B would be at sample size equals 52.
+
+### V.6
+```{r}
+rf.final <- randomForest(lnSalary ~ ., data = df_ln_hitters, subset = train.index, ntree = 800, mtry = 4)
+rf.predict.final <- predict(rf.final, newdata = df_ln_hitters[-train.index,])
+rf.predictS.final <- exp(rf.predict.final)
+rf.te <- mean((df_hitters$Salary[-train.index] - rf.predictS.final)^2)
+rf.te
+sqrt(rf.te)
+```
+
+The prediction error is around 99563.28.  Hence decision tree model leads to predictions that are within around a little more than $314,000 (√99563.28) of the annual Salary.
+
+### VI.1
+
+Among the three methods, random forest gives the smallest MSE, so I would choose to use random forest to predict the result.
+
+```{r}
+rf_optm = randomForest(lnSalary ~ ., data = df_ln_hitters,importance =TRUE,ntree = 800, mtry = 4)
+df.relative.imp <- data.frame(vars = rownames(rf_optm$importance), rel_imp = (rf_optm$importance[,2] / rf_optm$importance[which.max(rf_optm$importance[,2]), 2])*100)
+df.relative.imp <- df.relative.imp[order(-df.relative.imp$rel_imp),]
+```
+
+```{r}
+gout_varimp <- ggplot(data=df.relative.imp[1:10,], aes(x = reorder(vars,  rel_imp), y = rel_imp))+
+  geom_bar(stat="identity", fill="gray70")+
+  coord_flip()+
+  geom_text(aes(label=vars), vjust=0,color="lightblue4", size=4)+
+  ggtitle("Relative Variable Importance measured with reduced RSS")+
+  ylab("relative importance")+
+  xlab("variables")+
+  theme(plot.title =element_text(hjust = 0.5,size=13),
+        panel.background =element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.minor =element_blank(),
+        axis.title=element_text(size=11),
+        axis.line =element_line(colour = "gray"))
+gout_varimp
+```
+
+We can see that CHits, CAtBat, CRuns, CRBI, CWalks, Years, CHmRun, Hits, AtBat, RBI are important in predicting salary
+
+### VI.2
+```{r}
+which(rownames(Hitters) == "-Cecil Cooper")
+lnS<-predict(rf_optm, newdata = Hitters[49,-19])
+exp(lnS)
+```
+
+The predicted salary for Cecil Cooper would be 867.3212 thousand dollars.
+

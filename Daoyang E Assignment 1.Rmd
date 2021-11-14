@@ -1,0 +1,436 @@
+---
+title: "Assignment1"
+author: "Daoyang E"
+date: "9/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(MASS)
+library(broom)
+library(tidyr)
+library(knitr)
+library(leaps)
+library(sandwich)
+library(lmtest)
+library(glmnet)
+library(ggplot2)
+```
+
+
+### 1.(a).i
+```{r}
+linearmodel1 <- lm(medv ~ rm, data = Boston)
+summary(linearmodel1)
+sum(linearmodel1$residuals^2)
+```
+
+```{r}
+linearmodel2 <- lm(medv ~ age, data = Boston)
+summary(linearmodel2)
+sum(linearmodel2$residuals^2)
+```
+
+```{r}
+linearmodel3 <- lm(medv ~ nox, data = Boston)
+summary(linearmodel3)
+sum(linearmodel3$residuals^2)
+```
+
+We see that the first model, which chooses rm as the level one complexity exhibits to have the smallest RSS. So I will choose rm as the first regressor.
+
+### 1.(a).ii
+
+```{r}
+linearmodel4 <- lm(medv~nox+age+rm,data = Boston)
+sum(linearmodel4$residual^2)
+```
+
+```{r}
+linearmodel5 <- lm(medv~age+rm,data = Boston)
+sum(linearmodel5$residual^2)
+```
+
+```{r}
+linearmodel6 <- lm(medv~nox+rm,data = Boston)
+sum(linearmodel6$residual^2)
+```
+
+```{r}
+linearmodel7 <- lm(medv~nox+age,data = Boston)
+sum(linearmodel7$residual^2)
+```
+
+We notice that when doing backward stepwise selection, age exhibits to be the regressor that has the smallest impact on RSS during level 2 complexity, so the two regressors I would choose for model complexity 2 is nox and rm.
+
+### 1.(b).i
+
+Yes, the regressor I chose using best subset selection method would produce the same result as what I got from using forward stepwise selection method. Since here I only choose one regressor, so finding the regressor that produces the smallest RSS will give me the same result.
+
+### 1.(b).ii
+
+Yes, the regressors I chose using best subset selection method would give the same result as what I got from backward selection method. Since I am trying to find the set of regressors that will increase the RSS by the least value. Because we will only delete one regressor here, so in this case, finding the set of two regreesors that give the smallest RSS will give the same result as deleting one regressor that will increase RSS by the smallest value.
+
+
+### 2
+```{r}
+df_square<-data.frame(Boston[,c(-4,-14)]^2)
+names_square<-paste0(names(Boston)[c(-14,-4)],rep("sq",length(names(Boston))-2))
+colnames(df_square)<-names_square
+df_boston_new<-cbind(Boston,df_square)
+```
+
+```{r}
+set.seed(091119)
+train_set_index<-sample(c(TRUE,FALSE),nrow(df_boston_new),rep=TRUE,prob=c(1/2,1/2))
+head(train_set_index)
+sum(train_set_index)/length(train_set_index)
+```
+
+```{r}
+df_train <- df_boston_new[train_set_index,]
+df_test <- df_boston_new[!train_set_index,]
+```
+
+
+### 2.(a).i
+
+Based on $R^2$, if I want to choose the highest $R^2$, I would choose the model with the greatest complexity. The reason is that whenever the model take in more regressors, or say, have higher level of complexity, the RSS would always decrease and $R^2$ would always increase.
+
+### 2.(a).ii
+
+```{r}
+best_subset_train <- regsubsets(medv ~ ., data = df_train , nvmax = 25)
+best_subset_train_summary <- summary(best_subset_train)
+```
+
+```{r}
+best_subset_train_summary$bic
+```
+
+```{r}
+plot(best_subset_train_summary$bic,type="l",ylab="BIC",main="best -line&dot",col="blue",xlab="number of regressors")
+points(best_subset_train_summary$bic,col="blue")
+```
+
+```{r}
+which.min(best_subset_train_summary$bic)
+```
+
+The model complexity that displays the smallest BIC is model complexity 12, so I will choose 12 as my model complexity.
+
+### 2.(a).iii
+
+```{r}
+names(coef(best_subset_train, id = 12))
+```
+
+I see that, the variables that are chosen in the test set are crim, rm, dis, rad, tax, ptratio, black, lstat, noxsq, rmsq, dissq, lstatsq.
+
+### 2.(a).iv
+
+```{r}
+test_set_regressor<-model.matrix(medv~.,data=df_test)
+head(test_set_regressor[,names(coef(best_subset_train,id=12))])
+```
+
+```{r}
+selected_var_coef<-coef(best_subset_train,id=12)
+prediction<-test_set_regressor[,names(selected_var_coef)]%*%selected_var_coef
+head(prediction)
+(bic_prediction_error<-mean((df_test$medv-prediction)^2))
+```
+
+I see that the prediction error is `r bic_prediction_error` in this case. And the head of the 264 predictions is displayed.
+
+### 2.(b).i
+
+```{r}
+set.seed(2)
+second_train_set_index<-sample(c(TRUE,FALSE),nrow(df_train),rep=TRUE,prob=c(1/2,1/2))
+head(second_train_set_index)
+sum(second_train_set_index)/length(second_train_set_index)
+```
+
+```{r}
+df_second_train <- df_train[second_train_set_index,]
+df_validation <- df_train[!second_train_set_index,]
+```
+
+```{r}
+backward_stepwise_second_train_fit <- regsubsets(medv ~ ., data = df_second_train, nvmax = 25, method = "backward")
+backward_stepwise_second_train_summary <- summary(backward_stepwise_second_train_fit)
+```
+
+```{r}
+validation_set_regressor<-model.matrix(medv~.,data=df_validation)
+n_max_vars<-25
+backward_prediction_error<-rep(NA,n_max_vars)
+```
+
+```{r}
+for(model_size in 1:n_max_vars){
+  backward_selected_var_coef <- coef(backward_stepwise_second_train_fit, id = model_size)
+  backward_prediction <- validation_set_regressor[, names(backward_selected_var_coef)] %*% backward_selected_var_coef
+  backward_prediction_error[model_size] <- mean((df_validation$medv - backward_prediction)^2)
+}
+backward_prediction_error
+```
+
+```{r}
+which.min(backward_prediction_error)
+```
+
+I notice that, based on the validation method on backward selection method, I would still choose level 12 as the model complexity
+
+### 2.(b).ii
+
+```{r}
+backward_stepwise_train_fit <- regsubsets(medv ~ ., data = df_second_train, nvmax = 25, method = "backward")
+backward_stepwise_train_summary <- summary(backward_stepwise_train_fit)
+```
+
+```{r}
+names(coef(backward_stepwise_train_fit, id = 12))
+```
+
+The chosen variables are crim, chas, nox, rm, dis, black, lstat, noxsq, rmsq, dissq, ptratiosq, lstatsq.
+
+### 2.(b).iii
+
+```{r}
+backward_test_var_coef <- coef(backward_stepwise_train_fit, id = 12)
+backward_test_prediction <- test_set_regressor[, names(backward_test_var_coef)] %*% backward_test_var_coef
+backward_test_error <- mean((df_test$medv - backward_test_prediction)^2)
+backward_test_error
+```
+
+The prediction error from my test set based on the model estimated in 2.(b).ii is `r backward_test_error`.
+
+### 2.(c).i
+
+```{r}
+n_folds <- 10
+n_max_vars <- 25
+```
+
+```{r}
+set.seed(500)
+folds <- sample(1:n_folds, nrow(df_train), replace=TRUE)
+head(folds)
+table(folds)
+```
+
+```{r}
+avg_mse <- rep(0, n_max_vars)
+for(current_fold in 1:n_folds){
+  fit <- regsubsets(medv ~ ., data = df_train[folds != current_fold,],nvmax = n_max_vars, method = "forward")
+  valid_reg <- model.matrix(medv ~ ., data = df_train[folds == current_fold,])
+  mse <- rep(NA, n_max_vars)
+  for(model_size in 1:n_max_vars){
+    forward_selected_var_coef <- coef(fit, id = model_size)
+    forward_prediction <- valid_reg[, names(forward_selected_var_coef)] %*% forward_selected_var_coef
+    mse[model_size] <- mean((df_train$medv[folds == current_fold] - forward_prediction)^2)
+    }
+  avg_mse <- avg_mse + mse
+  }
+avg_mse <- avg_mse / n_folds
+avg_mse
+which.min(avg_mse)
+```
+
+I notice that the smallest Mean sqaured error is displayed in complexity level 14, thus I would choose 14 as my model complexity
+
+### 2.(c).ii
+
+```{r}
+forward_stepwise_train_fit <- regsubsets(medv ~ ., data = df_train, nvmax = 25, method = "forward")
+forward_stepwise_train_summary <- summary(forward_stepwise_train_fit)
+```
+
+```{r}
+names(coef(forward_stepwise_train_fit, id = 14))
+```
+
+I see that the variable chosen in this case is chas, rm, dis, rad, tax, ptratio, black, lstat, crimsq, noxsq, rmsq, agesq, dissq, lstatsq.
+
+### 2.(c).iii
+
+```{r}
+forward_test_var_coef <- coef(forward_stepwise_train_fit, id = 14)
+forward_test_prediction <- test_set_regressor[, names(forward_test_var_coef)] %*% forward_test_var_coef
+forward_test_error <- mean((df_test$medv - forward_test_prediction)^2)
+forward_test_error
+```
+
+The prediction error in my test set based on the model estimated in 2.(c).ii is `r forward_test_error`.
+
+### 2.(d).i
+
+```{r}
+x<-model.matrix(medv~.,df_train)[,-1]
+x_test<-model.matrix(medv~.,df_test)[,-1]
+y<-df_train$medv
+y_test<-df_test$medv
+```
+
+```{r}
+ridge_lambda_grid<-seq(10^2,10^-3,length.out=100)
+ridge.fit<-glmnet(x,y,alpha=0,lambda = ridge_lambda_grid)
+ridge.coef<-coef(ridge.fit)
+dim(ridge.coef)
+```
+
+```{r}
+lasso_lambda_grid<-seq(1,10^-5,length.out = 100)
+lasso.fit<-glmnet(x,y,alpha=1,lambda = lasso_lambda_grid)
+lasso.coef<-coef(lasso.fit)
+dim(lasso.coef)
+```
+
+```{r}
+lasso.fit$lambda[100]
+lasso.fit$lambda[1]
+lasso.coef[-1,1]
+```
+
+I notice that 100 $\lambda$s are considered in LASSO, the largest $\lambda$ considered is `r lasso.fit$lambda[1]`, for the largest $\lambda$, 21 variables are dropped.
+
+### 2.(d).ii
+
+```{r}
+ridge.fit$lambda[100]
+ridge.coef[-1,100]
+```
+
+The smallest $\lambda$ in the ridge regression is `r ridge.fit$lambda[100]`, And the coefficient estimates in the training set when the smallest $\lambda$ is used are listed above.
+
+### 2.(d).iii
+
+```{r}
+ridge_predicted <- predict(ridge.fit, newx = x_test , s = ridge.fit$lambda)
+ridge.mse <- colMeans((y_test - ridge_predicted) ^ 2)
+df.test.mse <- data.frame(mse = ridge.mse, lambda = ridge.fit$lambda)
+```
+
+```{r}
+gout <- ggplot(data = df.test.mse,aes(x = lambda, y = mse))+
+  geom_point(color = "lightblue")+
+  ggtitle("Ridge Regression")+
+  xlab(expression(lambda))+
+  ylab("mse of the predicted medv")+
+  theme(plot.title = element_text(hjust = 0.5,size = 13),
+        plot.background = element_rect(colour = "gray"),
+        panel.background = element_rect(fill = "white", colour = NA),
+        panel.grid.major = element_line(colour = "grey92"),
+        axis.title = element_text(size = 14),
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 14)
+        )
+gout
+```
+
+The graph looks like a logarithm graph with steep increase in the beginning at slow increase at the end.
+I would expect a graph that has a decrease in the beginning and increase following, but this graph is always increasing, So it's not making sense
+
+### 2.(d).iv
+
+```{r}
+df.LASSO.coef<-as.data.frame(as.matrix(t(lasso.coef[-1,])),row.names=dimnames(lasso.coef[-1,])[1])
+df.LASSO.lambda<-data.frame(lambda=lasso.fit$lambda)
+df.LASSO.combined<-cbind(df.LASSO.lambda,df.LASSO.coef)
+for(i in 2:ncol(df.LASSO.combined)){
+  temp<-data.frame(lambda=df.LASSO.combined[,1],coef=df.LASSO.combined[,i],
+                   var=rep(dimnames(lasso.coef[-1,])[[1]][i-1],length.out=nrow(df.LASSO.combined)))
+  if(i==2) {
+    df.LASSO.combined.final<-temp
+    }
+  else{
+    df.LASSO.combined.final<-rbind(df.LASSO.combined.final,temp)
+    }
+  }
+gout.LASSO.individual<-ggplot(df.LASSO.combined.final,
+                              aes(x=lambda,y=coef,color=var,group=var))+
+  geom_point(size=1)+
+  ggtitle("LASSO")+
+  xlab(expression(lambda))+
+  ylab(expression(beta))+
+  theme(plot.title =element_text(hjust = 0.5,size=13),
+  plot.background =element_rect(colour = "gray"),
+  panel.background =element_rect(fill = "white", colour = NA),
+  panel.grid.major =element_line(colour="grey92"),
+  axis.title=element_text(size=14),
+  legend.text=element_text(size=14),
+  legend.title=element_text(size=14)
+  )
+gout.LASSO.individual
+```
+
+The several variables that show most importance is ptratio, black, lstat and rmsq.
+
+### 2.(d).v
+
+```{r}
+set.seed(2)
+ridge.cv<-cv.glmnet(x,y,alpha=0, lambda = ridge_lambda_grid)
+set.seed(2)
+lasso.cv<-cv.glmnet(x,y,alpha=1, lambda = lasso_lambda_grid)
+```
+
+```{r}
+ridge.cv.result<-data.frame(lambda=ridge.cv$lambda,mse= ridge.cv$cvm)
+lasso.cv.result<-data.frame(lambda=lasso.cv$lambda,mse= lasso.cv$cvm)
+```
+
+```{r}
+ridge.cv$lambda.min
+lasso.cv$lambda.min
+```
+
+The optimal $\lambda$ for ridge regression is `r ridge.cv$lambda.min`
+and the optimal $\lambda$ for LASSO is `r lasso.cv$lambda.min`
+
+### 2.(d).vi
+
+```{r}
+pe.ridge<-mean((y_test-predict(ridge.fit,newx=x_test,s=ridge.cv$lambda.min))^2)
+pe.ridge
+```
+
+```{r}
+pe.lasso<-mean((y_test-predict(lasso.fit,newx=x_test,s=lasso.cv$lambda.min))^2)
+pe.lasso
+```
+
+The prediction error for ridge regression is `r pe.ridge` and the prediction error for LASSO is `r pe.lasso`
+
+### 2.(e)
+
+```{r}
+lmmodel<-lm(medv~., data = df_train)
+lmcoef<- lmmodel$coefficients
+```
+
+```{r}
+lm_test_prediction <- test_set_regressor %*% lmcoef
+lm_test_error <- mean((df_test$medv - lm_test_prediction)^2)
+lm_test_error
+```
+The prediction error using linear regression is `r lm_test_error`
+
+### 2.(f)
+
+```{r}
+error<- rbind(bic_prediction_error, backward_test_error, forward_test_error, pe.ridge, pe.lasso, lm_test_error)
+error
+```
+
+Best subset with BIC has the smallest prediction error, which means it does the best prediction
+
+### 2.(g)
+
+Tben in BIC, the most relevant variables will be crim, rm, dis, rad, tax, ptratio, black, lstat, noxsq, rmsq, dissq, lstatsq, which are the variables chosen during level 12 complexity.
